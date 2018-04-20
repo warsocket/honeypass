@@ -8,6 +8,7 @@ import "regexp"
 import "log"
 import "strings"
 import "encoding/base64"
+import "crypto/tls"
 
 
 var hostname string = "example.com"
@@ -15,31 +16,52 @@ var hostname string = "example.com"
 func TcpHandler(listenaddress string, handleFunc func(net.Conn)){
 	listen, err := net.Listen("tcp", listenaddress)
 	if err != nil {
-		log.Fatal("Error Listening")
+		log.Fatal(fmt.Sprintf("TCP Error Listening at %s", listenaddress))
 		return
 	}
 
-	defer listen.Close()
+    defer listen.Close()
+    for{
+        conn ,_ := listen.Accept()
+        go handleFunc(conn)
+    }
 
-	for{
-		conn ,_ := listen.Accept()
-		if err == nil{
-			handleFunc(conn)	
-		}else{
-			log.Println("Error Acepting")
-		}
-		
-	}
 }
+
+
+func TcpTlsHandler(listenaddress string, handleFunc func(net.Conn), tlsConfig *tls.Config){
+    listen, err := net.Listen("tcp", listenaddress)
+    if err != nil {
+        log.Fatal(fmt.Sprintf("TLS Error Listening at %s", listenaddress))
+        return
+    }
+
+    defer listen.Close()
+    for{
+        conn ,_ := listen.Accept()
+        tlsconn := tls.Server(conn, tlsConfig)       
+        go handleFunc(tlsconn)
+    }
+}
+
 
 func main(){
 	if len(os.Args) > 1 {
 		hostname = os.Args[1]
 	}
 
+    cer, err := tls.LoadX509KeyPair("/etc/ssl/certs/ssl-cert-snakeoil.pem", "/etc/ssl/private/ssl-cert-snakeoil.key")
+    if err != nil {
+        log.Println(err)
+    }
+    tlsconf := tls.Config{Certificates: []tls.Certificate{cer}}
+    tlsconf=tlsconf //prevents not used message so you can easlily make a config without using TLS
+
 	go TcpHandler("0.0.0.0:80", handleHttp)
+    go TcpTlsHandler("0.0.0.0:443", handleHttp, &tlsconf)
 	go TcpHandler("0.0.0.0:25", handleSmtp)
-	go TcpHandler("0.0.0.0:587", handleSmtp) //submission, but the handler works for smtp and submission
+	go TcpHandler("0.0.0.0:587", handleSmtp) //submission, but the handler works for smtp and submission.
+    go TcpTlsHandler("0.0.0.0:465", handleSmtp, &tlsconf) //deprecated port, but if ppl put passwords in well take it.
 
 	for{
 		time.Sleep(1)
@@ -60,7 +82,7 @@ func handleHttp(conn net.Conn){
 		if found != nil {
 			decoded, err := base64.StdEncoding.DecodeString(found[1])
 			if err == nil{
-				print(string(decoded) + "\n")
+				fmt.Println(string(decoded))
 			}
 
 		}
@@ -84,13 +106,6 @@ func handleSmtp(conn net.Conn){
 
 	fmt.Fprintf(writer, "220 %s ESMTP Honeypot\r\n", hostname)
 	writer.Flush()
-
-	// nuke := func(){
-	// 	writer.WriteString("550 Bzzz, *stings*\r\n")
-	// 	writer.Flush()
-	// 	conn.Close()
-	// 	return
-	// }
 
 	// Stateless command processing
 	// We allow way more abuse/erros then the RFC's, we dont care, we need passwords.
@@ -131,7 +146,7 @@ func handleSmtp(conn net.Conn){
 				if err == nil{
 					userpassPlain := strings.Replace(string(decoded),"\x00",":",-1)
 					if len(userpassPlain) > 0{
-						print( userpassPlain[1:] + "\n")
+						fmt.Println( userpassPlain[1:] + "\n" )
 					}
 				}
 				fmt.Fprintf(writer, "535 5.7.8 Error: authentication failed\r\n")
