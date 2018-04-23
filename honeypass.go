@@ -12,6 +12,7 @@ import "crypto/tls"
 
 
 var hostname string = "example.com"
+var defTlsConfig *tls.Config
 
 func TcpHandler(listenaddress string, handleFunc func(net.Conn)){
 	listen, err := net.Listen("tcp", listenaddress)
@@ -50,18 +51,26 @@ func main(){
 		hostname = os.Args[1]
 	}
 
+
     cer, err := tls.LoadX509KeyPair("/etc/ssl/certs/ssl-cert-snakeoil.pem", "/etc/ssl/private/ssl-cert-snakeoil.key")
     if err != nil {
         log.Println(err)
     }
-    tlsconf := tls.Config{Certificates: []tls.Certificate{cer}}
-    tlsconf=tlsconf //prevents not used message so you can easlily make a config without using TLS
+    defTlsConfig := &tls.Config{Certificates: []tls.Certificate{cer}}
+    defTlsConfig = defTlsConfig //prevents not used message so you can easlily make a config without using TLS
 
+    //HTTP
 	go TcpHandler("0.0.0.0:80", handleHttp)
-    go TcpTlsHandler("0.0.0.0:443", handleHttp, &tlsconf)
+    go TcpTlsHandler("0.0.0.0:443", handleHttp, defTlsConfig)
+
+    //(E)SMTP
 	go TcpHandler("0.0.0.0:25", handleSmtp)
 	go TcpHandler("0.0.0.0:587", handleSmtp) //submission, but the handler works for smtp and submission.
-    go TcpTlsHandler("0.0.0.0:465", handleSmtp, &tlsconf) //deprecated port, but if ppl put passwords in well take it.
+    go TcpTlsHandler("0.0.0.0:465", handleSmtp, defTlsConfig) //deprecated port, but if ppl put passwords in well take it.
+
+    //IMAP
+    go TcpHandler("0.0.0.0:143", handleImap)
+    go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
 
 	for{
 		time.Sleep(1)
@@ -89,7 +98,7 @@ func handleHttp(conn net.Conn){
 		if len(msg) < 1 {break}
 	}
 
-	writer.WriteString(`HTTP/1.1 401 Unauthorized
+	fmt.Fprint(writer, `HTTP/1.1 401 Unauthorized
 Server: Honeypot
 WWW-Authenticate: Basic realm="Hive"
 Connection: Close
@@ -162,5 +171,64 @@ func handleSmtp(conn net.Conn){
 		writer.Flush()
 	}
 	
+}
+
+
+func handleImap(conn net.Conn){
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
+
+	fmt.Fprint(writer, "* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] Honeypot ready.\r\n") //We need to add STARTTLS later here when implementing starttls
+	writer.Flush()
+	
+	for{
+		fullcmd, _, err := reader.ReadLine()
+		if err != nil {break}
+
+		cmd := strings.Split(string(fullcmd), " ")
+
+		//substitute no identifier for *
+		if cmd[0] == "" {
+			cmd[0] = "*"
+		}
+
+		if len(cmd) < 2{
+			fmt.Fprintf(writer, "%s BAD Error in IMAP command received by server.\r\n", cmd[0])
+			writer.Flush()
+			continue
+		}
+
+		cmdId, cmdCmd, cmdRest := cmd[0], strings.ToUpper(cmd[1]), cmd[2:]
+		cmdId = cmdId
+		cmdCmd = cmdCmd
+		cmdRest = cmdRest
+
+		if cmdCmd == "CAPABILITY"{
+			fmt.Fprintf(writer, "%s CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n", cmdId) //We need to add STARTTLS later here when implementing starttls
+
+		} else if cmdCmd == "LOGIN"{
+			fmt.Fprintf(writer, "%s NO [AUTHENTICATIONFAILED] Authentication failed.\r\n", cmdId)
+
+			if len(cmdRest) >= 2{
+				user, pass := cmdRest[0], cmdRest[1]
+
+				if user[0] == '"' && user[len(user)-1] == '"'{
+					user = user[1:len(user)-1]
+				}
+
+				if pass[0] == '"' && pass[len(pass)-1] == '"'{
+					pass = pass[1:len(pass)-1]
+				}
+
+				fmt.Printf("%s:%s\n", user, pass)
+			}
+
+		} else {
+			fmt.Fprintf(writer, "%s BAD Error in IMAP command received by server.\r\n", cmdId)
+		}
+
+		writer.Flush()
+	}
 
 }
