@@ -4,15 +4,23 @@ import "os"
 import "fmt"
 import "time"
 import "bufio"
+import "io/ioutil"
 import "regexp"
 import "log"
 import "strings"
 import "encoding/base64"
 import "crypto/tls"
+import "golang.org/x/crypto/ssh"
+import "path/filepath"
 
+
+const MaxInt = int(^uint(0)  >> 1) 
 
 var hostname string = "example.com"
 var defTlsConfig *tls.Config
+var sshConfig *ssh.ServerConfig
+
+
 
 func TcpHandler(listenaddress string, handleFunc func(net.Conn)){
 	listen, err := net.Listen("tcp", listenaddress)
@@ -47,17 +55,47 @@ func TcpTlsHandler(listenaddress string, handleFunc func(net.Conn), tlsConfig *t
 
 
 func main(){
+	//set hostname for various protocols
 	if len(os.Args) > 1 {
 		hostname = os.Args[1]
 	}
 
-
+	//init TLS config
     cer, err := tls.LoadX509KeyPair("/etc/ssl/certs/ssl-cert-snakeoil.pem", "/etc/ssl/private/ssl-cert-snakeoil.key")
     if err != nil {
         log.Println(err)
     }
     defTlsConfig := &tls.Config{Certificates: []tls.Certificate{cer}}
     defTlsConfig = defTlsConfig //prevents not used message so you can easlily make a config without using TLS
+
+
+    //init SSH config
+    sshConfig = &ssh.ServerConfig{
+    	MaxAuthTries: MaxInt,
+	    PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+	    	fmt.Printf("%s:%s\r\n", c.User(), string(pass))
+	    	return nil, fmt.Errorf("password rejected for %q", c.User())
+	    },
+	}
+
+	privKey := filepath.Join(os.Getenv("HOME"),"/.ssh/id_rsa")
+	privateBytes, err := ioutil.ReadFile(privKey)
+	if err != nil {
+	    log.Println("Failed to load SSH private key: ", err)
+	}
+
+	private, err := ssh.ParsePrivateKey(privateBytes)
+	if err != nil {
+	    log.Println("Failed to parse SSH private key: ", err)
+	}
+
+	sshConfig.AddHostKey(private)
+
+
+    //Start handlers
+
+	//SSH
+	go TcpHandler("0.0.0.0:22", handleSsh)
 
     //HTTP
 	go TcpHandler("0.0.0.0:80", handleHttp)
@@ -231,4 +269,9 @@ func handleImap(conn net.Conn){
 		writer.Flush()
 	}
 
+}
+
+func handleSsh(conn net.Conn){
+	ssh.NewServerConn(conn, sshConfig)
+	conn.Close()
 }
