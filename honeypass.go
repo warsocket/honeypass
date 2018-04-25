@@ -17,6 +17,14 @@ import "path/filepath"
 const MaxInt = int(^uint(0)  >> 1) 
 
 var hostname string = "example.com"
+
+var sshBanner string = "SSH-2.0-HoneySSH"
+var httpServer string = "HoneyHttp"
+var httpRealm string = "Hive"
+var smtpBanner string = "HoneyMail"
+var imapBanner string = "HoneImap"
+
+
 var defTlsConfig *tls.Config
 var sshConfig *ssh.ServerConfig
 
@@ -71,6 +79,7 @@ func main(){
 
     //init SSH config
     sshConfig = &ssh.ServerConfig{
+    	ServerVersion: sshBanner,
     	MaxAuthTries: MaxInt,
 	    PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
 	    	fmt.Printf("%s:%s\r\n", c.User(), string(pass))
@@ -136,12 +145,12 @@ func handleHttp(conn net.Conn){
 		if len(msg) < 1 {break}
 	}
 
-	fmt.Fprint(writer, `HTTP/1.1 401 Unauthorized
-Server: Honeypot
-WWW-Authenticate: Basic realm="Hive"
+	fmt.Fprintf(writer, `HTTP/1.1 401 Unauthorized
+Server: %s
+WWW-Authenticate: Basic realm="%s"
 Connection: Close
 
-`)
+`, httpServer, httpRealm)
 	writer.Flush()
 	conn.Close()
 }
@@ -151,7 +160,7 @@ func handleSmtp(conn net.Conn){
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	fmt.Fprintf(writer, "220 %s ESMTP Honeypot\r\n", hostname)
+	fmt.Fprintf(writer, "220 %s ESMTP %s\r\n", hostname, smtpBanner)
 	writer.Flush()
 
 	// Stateless command processing
@@ -217,7 +226,7 @@ func handleImap(conn net.Conn){
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
-	fmt.Fprint(writer, "* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] Honeypot ready.\r\n") //We need to add STARTTLS later here when implementing starttls
+	fmt.Fprintf(writer, "* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] %s ready.\r\n", imapBanner) //We need to add STARTTLS later here when implementing starttls
 	writer.Flush()
 	
 	for{
