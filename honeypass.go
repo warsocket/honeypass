@@ -115,21 +115,21 @@ func main(){
 
     //Start handlers
 
-	// //SSH
-	// go TcpHandler("0.0.0.0:22", handleSsh)
+	//SSH
+	go TcpHandler("0.0.0.0:22", handleSsh)
 
- //    //HTTP
-	// go TcpHandler("0.0.0.0:80", handleHttp)
- //    go TcpTlsHandler("0.0.0.0:443", handleHttp, defTlsConfig)
+    //HTTP
+	go TcpHandler("0.0.0.0:80", handleHttp)
+    go TcpTlsHandler("0.0.0.0:443", handleHttp, defTlsConfig)
 
- //    //(E)SMTP
-	// go TcpHandler("0.0.0.0:25", handleSmtp)
-	// go TcpHandler("0.0.0.0:587", handleSmtp) //submission, but the handler works for smtp and submission.
- //    go TcpTlsHandler("0.0.0.0:465", handleSmtp, defTlsConfig) //deprecated port, but if ppl put passwords in well take it.
+    //(E)SMTP
+	go TcpHandler("0.0.0.0:25", handleSmtp)
+	go TcpHandler("0.0.0.0:587", handleSmtp) //submission, but the handler works for smtp and submission.
+    go TcpTlsHandler("0.0.0.0:465", handleSmtp, defTlsConfig) //deprecated port, but if ppl put passwords in well take it.
 
- //    //IMAP
- //    go TcpHandler("0.0.0.0:143", handleImap)
- //    go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
+    //IMAP
+    go TcpHandler("0.0.0.0:143", handleImap)
+    go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
 
 	for{
 		time.Sleep(time.Second)
