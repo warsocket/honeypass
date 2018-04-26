@@ -61,6 +61,18 @@ func TcpTlsHandler(listenaddress string, handleFunc func(net.Conn), tlsConfig *t
     }
 }
 
+//TODO sanitaiton on passwords
+func emitBare(userpass string, remote, local string){
+	fmt.Printf("%s\t%s\t%s\t%s\n", userpass, remote, local, fmt.Sprintf(time.Now().Format(time.RFC3339)))
+}
+
+func emit(userpass string, conn net.Conn){
+	emitBare(userpass, conn.RemoteAddr().String(), conn.LocalAddr().String() )
+}
+
+
+
+
 
 func main(){
 	//set hostname for various protocols
@@ -82,7 +94,8 @@ func main(){
     	ServerVersion: sshBanner,
     	MaxAuthTries: MaxInt,
 	    PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-	    	fmt.Printf("%s:%s\r\n", c.User(), string(pass))
+	    	// fmt.Printf("%s:%s\r\n", c.User(), string(pass))
+	    	emitBare(fmt.Sprintf("%s:%s",c.User(), string(pass)), c.RemoteAddr().String(), c.LocalAddr().String())
 	    	return nil, fmt.Errorf("password rejected for %q", c.User())
 	    },
 	}
@@ -138,7 +151,9 @@ func handleHttp(conn net.Conn){
 		if found != nil {
 			decoded, err := base64.StdEncoding.DecodeString(found[1])
 			if err == nil{
-				fmt.Println(string(decoded))
+
+				// fmt.Println()
+				emit(string(decoded), conn)
 			}
 
 		}
@@ -200,9 +215,13 @@ func handleSmtp(conn net.Conn){
 
 				decoded, err := base64.StdEncoding.DecodeString(string(userpass))
 				if err == nil{
-					userpassPlain := strings.Replace(string(decoded),"\x00",":",-1)
-					if len(userpassPlain) > 0{
-						fmt.Println( userpassPlain[1:] + "\n" )
+					matched, _ = regexp.MatchString("\x00.+\x00.+", string(decoded))
+					if matched {
+						userpassPlain := strings.Replace(string(decoded),"\x00",":",-1)
+						if len(userpassPlain) > 0{
+							emit(userpassPlain[1:], conn)
+							// fmt.Println( userpassPlain[1:] + "\n" )
+						}
 					}
 				}
 				fmt.Fprintf(writer, "535 5.7.8 Error: authentication failed\r\n")
@@ -268,7 +287,8 @@ func handleImap(conn net.Conn){
 					pass = pass[1:len(pass)-1]
 				}
 
-				fmt.Printf("%s:%s\n", user, pass)
+				// fmt.Printf("%s:%s\n", user, pass)
+				emit(fmt.Sprintf("%s:%s", user, pass), conn)
 			}
 
 		} else {
