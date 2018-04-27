@@ -25,6 +25,8 @@ var smtpBanner string = "HoneyMail"
 var imapBanner string = "HoneImap"
 var popBanner string = "Honeypop"
 
+var certPath string = "/etc/ssl/certs/ssl-cert-snakeoil.pem"
+var certKey string = "/etc/ssl/private/ssl-cert-snakeoil.key"
 
 var defTlsConfig *tls.Config
 var sshConfig *ssh.ServerConfig
@@ -82,7 +84,7 @@ func main(){
 	}
 
 	//init TLS config
-    cer, err := tls.LoadX509KeyPair("/etc/ssl/certs/ssl-cert-snakeoil.pem", "/etc/ssl/private/ssl-cert-snakeoil.key")
+    cer, err := tls.LoadX509KeyPair(certPath, certKey)
     if err != nil {
         log.Println(err)
     }
@@ -129,8 +131,8 @@ func main(){
     go TcpTlsHandler("0.0.0.0:465", handleSmtp, defTlsConfig) //deprecated port, but if ppl put passwords in well take it.
 
     //IMAP
-    // go TcpHandler("0.0.0.0:143", handleImap)
-    // go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
+    go TcpHandler("0.0.0.0:143", handleImap)
+    go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
 
     //POP
     go TcpHandler("0.0.0.0:110", handlePop)
