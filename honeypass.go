@@ -23,6 +23,7 @@ var httpServer string = "HoneyHttp"
 var httpRealm string = "Hive"
 var smtpBanner string = "HoneyMail"
 var imapBanner string = "HoneImap"
+var popBanner string = "Honeypop"
 
 
 var defTlsConfig *tls.Config
@@ -128,8 +129,12 @@ func main(){
     go TcpTlsHandler("0.0.0.0:465", handleSmtp, defTlsConfig) //deprecated port, but if ppl put passwords in well take it.
 
     //IMAP
-    go TcpHandler("0.0.0.0:143", handleImap)
-    go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
+    // go TcpHandler("0.0.0.0:143", handleImap)
+    // go TcpTlsHandler("0.0.0.0:993", handleImap, defTlsConfig)
+
+    //POP
+    go TcpHandler("0.0.0.0:110", handlePop)
+    go TcpTlsHandler("0.0.0.0:995", handlePop, defTlsConfig)
 
 	for{
 		time.Sleep(time.Second)
@@ -295,6 +300,52 @@ func handleImap(conn net.Conn){
 		}
 
 		writer.Flush()
+	}
+
+}
+
+func handlePop(conn net.Conn){
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
+
+	fmt.Fprintf(writer, "+OK %s ready.\r\n", popBanner)
+	writer.Flush()
+
+	for{
+		fullcmd, _, err := reader.ReadLine()
+		if err != nil {break}
+		cmd := strings.SplitN(string(fullcmd), " ", 2)
+		cmd[0] = strings.ToUpper(cmd[0])
+
+		fmt.Printf("%v %d", cmd, len(cmd))
+
+		if cmd[0] == "CAPA"{
+			fmt.Fprint(writer, "+OK Capability list follows\r\nUSER\r\n.\r\n")
+
+		} else if (cmd[0] == "USER") && len(cmd) > 1 {
+			user := cmd[1]
+			fmt.Fprint(writer, "+OK\r\n")
+			writer.Flush()
+
+			fullcmd, _, err = reader.ReadLine()
+			if err != nil {break}
+			cmd = strings.SplitN(string(fullcmd), " ", 2)
+			cmd[0] = strings.ToUpper(cmd[0])
+
+			if (cmd[0] == "PASS") && len(cmd) > 1 {
+				fmt.Fprint(writer, "-ERR Authentication error\r\n")
+				emit(fmt.Sprintf("%s:%s", user, cmd[1]), conn)
+			} else {
+				fmt.Fprint(writer, "-ERR invalid command\r\n")
+			}
+
+		} else {
+			fmt.Fprint(writer, "-ERR invalid command\r\n")
+		}
+
+		writer.Flush()
+
 	}
 
 }
