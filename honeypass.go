@@ -282,8 +282,10 @@ func handleImap(conn net.Conn){
 		} else if cmdCmd == "LOGIN"{
 			fmt.Fprintf(writer, "%s NO [AUTHENTICATIONFAILED] Authentication failed.\r\n", cmdId)
 
-			if len(cmdRest) >= 2{
+			if len(cmdRest) >= 2{ 
 				user, pass := cmdRest[0], cmdRest[1]
+
+				//TODO: allow usernames / passwords with spaces eg: X01 LOGIN "John Doe" "correct horse battery staple"
 
 				if len(user) > 1 && user[0] == '"' && user[len(user)-1] == '"'{
 					user = user[1:len(user)-1]
