@@ -285,11 +285,11 @@ func handleImap(conn net.Conn){
 			if len(cmdRest) >= 2{
 				user, pass := cmdRest[0], cmdRest[1]
 
-				if user[0] == '"' && user[len(user)-1] == '"'{
+				if len(user) > 1 && user[0] == '"' && user[len(user)-1] == '"'{
 					user = user[1:len(user)-1]
 				}
 
-				if pass[0] == '"' && pass[len(pass)-1] == '"'{
+				if len(pass) > 1 && pass[0] == '"' && pass[len(pass)-1] == '"'{
 					pass = pass[1:len(pass)-1]
 				}
 
