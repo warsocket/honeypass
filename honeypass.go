@@ -272,9 +272,6 @@ func handleImap(conn net.Conn){
 		}
 
 		cmdId, cmdCmd, cmdRest := cmd[0], strings.ToUpper(cmd[1]), cmd[2:]
-		cmdId = cmdId
-		cmdCmd = cmdCmd
-		cmdRest = cmdRest
 
 		if cmdCmd == "CAPABILITY"{
 			fmt.Fprintf(writer, "%s CAPABILITY IMAP4rev1 AUTH=PLAIN\r\n", cmdId) //We need to add STARTTLS later here when implementing starttls
